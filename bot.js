@@ -1,13 +1,17 @@
+process.env["NTBA_FIX_350"] = 1
+
 const TelegramBot = require('node-telegram-bot-api')
-const saveImageData = require('./saveImageData')
 const sharp = require('sharp')
-const getUserImageData = require('./getUserImageData')
+const saveImageData = require('./saveImageData')
 
 require('dotenv').config()
 
-// توکن ربات تلگرام خود را در فایل .env قرار دهید
 const token = process.env.BOT_TOKEN
-const bot = new TelegramBot(token, { polling: true })
+const bot = new TelegramBot(token, {
+    polling: true,
+    filepath: false,
+    disableContentTypeValidation: true
+})
 
 async function checkPublicChannelMembership (userId)
 {
@@ -42,11 +46,11 @@ bot.onText(/\/start/, async (msg) =>
 
     if (!memberships.channel1)
     {
-        keyboard.push([{ text: 'عضویت در کانال اول ما 1️⃣', url: 'https://t.me/channel1username' }])
+        keyboard.push([{ text: 'عضویت در کانال اول ما 1️⃣', url: 'https://t.me/DeepDevs' }])
     }
     if (!memberships.channel2)
     {
-        keyboard.push([{ text: 'عضویت در کانال دوم ما 2️⃣', url: 'https://t.me/channel2username' }])
+        keyboard.push([{ text: 'عضویت در کانال دوم ما 2️⃣', url: 'https://t.me/InstaDevs' }])
     }
     if (keyboard.length > 0)
     {
@@ -58,13 +62,10 @@ bot.onText(/\/start/, async (msg) =>
         })
     } else
     {
-        bot.sendMessage(chatId, 'شما در هر دو کانال عضو هستید. می‌توانید عکس خود را آپلود کنید.')
-        // در اینجا می‌توانید منطق و عملکرد ربات بعد از عضویت در هر دو کانال را ادامه دهید
+        bot.sendMessage(chatId, 'شما در هر دو کانال عضو هستید. می‌توانید عکس خود را ⚠️ بصورت فایل ⚠️ آپلود کنید.')
     }
 })
 
-
-// رویداد برای پاسخگویی به دکمه "use bot"
 bot.on('callback_query', async (callbackQuery) =>
 {
     const chatId = callbackQuery.message.chat.id
@@ -79,15 +80,12 @@ bot.on('callback_query', async (callbackQuery) =>
         let errorMessage = ''
         let keyboard = []
 
-        // اگر کاربر به هیچ کانالی عضو نشده بود
         if (!memberships.channel1 && !memberships.channel2)
         {
             errorMessage = 'شما هنوز عضو هیچ کدام از کانال‌ها نیستید. لطفاً به کانال‌های زیر عضو شوید:'
             keyboard.push([{ text: 'عضویت در کانال اول ما 1️⃣', url: 'https://t.me/DeepDevs' }])
             keyboard.push([{ text: 'عضویت در کانال دوم ما 2️⃣', url: 'https://t.me/InstaDevs' }])
-        }
-        // اگر کاربر به یکی از کانال‌ها عضو نشده بود
-        else if (!memberships.channel1)
+        } else if (!memberships.channel1)
         {
             errorMessage = 'شما هنوز عضو کانال 1 نیستید. لطفاً به آن عضو شوید:'
             keyboard.push([{ text: 'عضویت در کانال اول ما 1️⃣', url: 'https://t.me/DeepDevs' }])
@@ -97,7 +95,6 @@ bot.on('callback_query', async (callbackQuery) =>
             keyboard.push([{ text: 'عضویت در کانال دوم ما 2️⃣', url: 'https://t.me/InstaDevs' }])
         }
 
-        // اگر کاربر به هیچ کانالی عضو نبود، پیام خطا را ارسال کنید
         if (errorMessage !== '')
         {
             errorMessage += '\nلطفاً دوباره دکمه "use bot" را بزنید و پس از عضویت در کانال‌ها، عکس خود را آپلود کنید.'
@@ -107,43 +104,145 @@ bot.on('callback_query', async (callbackQuery) =>
                     inline_keyboard: keyboard,
                 }
             })
-        }
-        // اگر کاربر به هیچ کانالی عضو نبود، ادامه بدهید
-        else
+        } else
         {
-            bot.sendMessage(chatId, 'لطفا عکس مورد نظر خودتون رو آپلود کنید ')
-            // اینجا می‌توانید منطق و عملکرد بعدی ربات (مانند دریافت عکس) را پیاده‌سازی کنید
+            bot.sendMessage(chatId, 'لطفا عکس مورد نظر خودتون رو ⚠️ بصورت فایل ⚠️ آپلود کنید ')
         }
     }
 
-    // حذف دکمه‌های انتخابی بعد از استفاده
     bot.deleteMessage(chatId, messageId)
 })
 
+// Event listener for receiving documents (images)
+bot.on('document', async (msg) =>
+{
+    const chatId = msg.chat.id
+    const userId = msg.from.id
+    const fileId = msg.document.file_id
+    const fileMimeType = msg.document.mime_type
 
-// تابع برای فشرده‌سازی تصویر
-async function compressImage (chatId, imageId)
+    // Check if the document is an image
+    if (fileMimeType.startsWith('image/'))
+    {
+        // Check channel membership
+        const memberships = await checkPublicChannelMembership(userId)
+
+        // Check if user is a member of both channels
+        if (memberships.channel1 && memberships.channel2)
+        {
+            // Function to ask for compression quality
+            const askForCompressionQuality = () =>
+            {
+                bot.sendMessage(chatId, 'لطفاً کیفیت فشرده‌سازی را انتخاب کنید (عددی بین 1 تا 100): \n ⚠️ عدد کیفیت پیشنهادی (80) میباشد ⚠️', { reply_markup: { force_reply: true } })
+                    .then(sentMessage =>
+                    {
+                        bot.onReplyToMessage(chatId, sentMessage.message_id, async (response) =>
+                        {
+                            const quality = parseInt(response.text)
+                            if (!isNaN(quality) && quality >= 1 && quality <= 100)
+                            {
+                                // Send a sticker to the user
+                                const stickerMessage = await bot.sendSticker(chatId, 'CAACAgIAAxkBAAKR4GYiUQ5EmwYIwZG9tp-iw_MwdmZyAAIjAAMoD2oUJ1El54wgpAY0BA')
+                                // Compress and send the image with the original format and the requested quality
+                                const compressedImageMessage = await compressAndSendImage(chatId, userId, fileId, fileMimeType, quality)
+
+                                // Delete the sticker message
+
+                                bot.deleteMessage(chatId, stickerMessage.message_id)
+                                // Delete the quality message
+
+                                bot.deleteMessage(chatId, sentMessage.message_id)
+
+                                bot.deleteMessage(chatId, response.message_id)
+                            } else
+                            {
+                                // Ask for quality again if the entered value is not valid
+                                bot.sendMessage(chatId, '🚦لطفا برای انتخاب کیفیت مورد نظر فقط عدد وارد کنید 🚦')
+                                    .then(() => askForCompressionQuality()) // Ask for quality again
+                            }
+                        })
+                    })
+            }
+
+            // Call function to ask for compression quality
+            askForCompressionQuality()
+        } else
+        {
+            // Prepare keyboard with channel links
+            let errorMessage = 'برای استفاده از این قابلیت، لطفاً در کانال‌های زیر عضو شوید ✔️'
+            const keyboard = []
+
+            if (!memberships.channel1)
+            {
+                keyboard.push([{ text: 'عضویت در کانال اول ما 1️⃣', url: 'https://t.me/DeepDevs' }])
+            }
+            if (!memberships.channel2)
+            {
+                keyboard.push([{ text: 'عضویت در کانال دوم ما 2️⃣', url: 'https://t.me/InstaDevs' }])
+            }
+            keyboard.push([{ text: '👉 Use Bot 👈', callback_data: 'use_bot' }])
+
+            // Send error message with keyboard
+            bot.sendMessage(chatId, errorMessage, {
+                reply_markup: {
+                    inline_keyboard: keyboard,
+                }
+            })
+        }
+    } else
+    {
+        bot.sendMessage(chatId, 'لطفاً فقط فایل‌های عکس را ارسال کنید.')
+    }
+})
+
+
+
+
+
+// Function to compress and send image with custom quality
+async function compressAndSendImage (chatId, userId, fileId, fileMimeType, quality)
 {
     try
     {
-        // دریافت تصویر از تلگرام
-        const imageStream = await bot.getFileStream(imageId)
-
-        // تبدیل تصویر به Buffer
+        const imageStream = await bot.getFileStream(fileId)
         const imageBuffer = await streamToBuffer(imageStream)
 
-        // فشرده‌سازی تصویر با استفاده از sharp
-        const compressedImageBuffer = await sharp(imageBuffer).resize({ quality: 80 }).toBuffer()
+        let compressedImageBuffer
 
-        // ارسال تصویر فشرده شده به کاربر
-        bot.sendPhoto(chatId, compressedImageBuffer)
+        // Select compression method based on file format
+        if (fileMimeType === 'image/png')
+        {
+            compressedImageBuffer = await sharp(imageBuffer).png({ quality: quality, rotate: 0 }).toBuffer()
+        } else if (fileMimeType === 'image/jpeg')
+        {
+            compressedImageBuffer = await sharp(imageBuffer).jpeg({ quality: quality, rotate: 0 }).toBuffer()
+        } else
+        {
+            // Handle unsupported formats or provide a default compression method
+            console.error('Unsupported file format:', fileMimeType)
+            return
+        }
+
+        // Save user's image data
+        saveImageData(userId, fileId)
+
+        // Get the file extension from the MIME type
+        const fileExtension = fileMimeType.split('/')[1]
+        // Send the compressed image with the original format
+        const fileOptions = {
+            filename: `compressed_image.${fileExtension}`, // تنظیم نام فایل
+            contentType: fileMimeType // تنظیم MIME type
+        }
+        return await bot.sendDocument(chatId, compressedImageBuffer, {}, fileOptions) // اضافه کردن file options برای تنظیم نام فایل و MIME type
+
     } catch (error)
     {
-        console.error('Error compressing image:', error)
+        console.error('Error compressing and sending image:', error)
     }
 }
 
-// تابع برای تبدیل Stream به Buffer
+
+// Function to convert stream to buffer
 function streamToBuffer (stream)
 {
     return new Promise((resolve, reject) =>
@@ -156,25 +255,22 @@ function streamToBuffer (stream)
 }
 
 
-// رویداد برای دریافت عکس از کاربر
-bot.on('photo', async (msg) =>
+bot.onText(/\/help/, (msg) =>
 {
     const chatId = msg.chat.id
-    const userId = msg.from.id
-    const imageId = msg.photo[0].file_id
 
-    // ذخیره اطلاعات عکس در فایل
-    saveImageData(userId, imageId)
+    const helpMessage = `
+    به ربات خوش آمدید! این ربات برای فشرده‌سازی تصاویر استفاده می‌شود.
 
-    // از فایل JSON شناسه کاربر را دریافت کنید
-    const userImageData = getUserImageData(userId)
+    برای استفاده از ربات، ابتدا باید در کانال‌های زیر عضو شوید:
+    1️⃣ [کانال اول](https://t.me/DeepDevs)
+    2️⃣ [کانال دوم](https://t.me/InstaDevs)
 
-    // اگر شناسه کاربر در فایل وجود دارد، فشرده‌سازی و ارسال تصویر به کاربر
-    if (userImageData)
-    {
-        compressImage(chatId, userImageData.imageId) // تغییر این قسمت
-    }
+    پس از عضویت در هر دو کانال، دکمهUse Bot رو بزنید و سپس می‌توانید عکس خود را (بصورت فایل) آپلود کنید و ربات آن را فشرده‌سازی کرده و برای شما ارسال می‌کند.
 
-    // پیام تایید برای کاربر
-    bot.sendMessage(chatId, 'عکس شما با موفقیت ذخیره شد.')
+    برای شروع فشرده‌سازی عکس، فقط کافی است عکس مورد نظر خود را ارسال کنید.
+
+    امیدواریم تجربه خوبی داشته باشید!`
+
+    bot.sendMessage(chatId, helpMessage, { parse_mode: 'Markdown', disable_web_page_preview: true })
 })

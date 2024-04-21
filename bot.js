@@ -1,4 +1,4 @@
-process.env["NTBA_FIX_350"] = 1
+// process.env["NTBA_FIX_350"] = 1
 
 const TelegramBot = require('node-telegram-bot-api')
 const sharp = require('sharp')
@@ -36,162 +36,118 @@ async function checkPublicChannelMembership (userId)
     }
 }
 
-bot.onText(/\/start/, async (msg) =>
+bot.on('message', async (msg) =>
 {
     const chatId = msg.chat.id
-    const userId = msg.from.id
 
-    const memberships = await checkPublicChannelMembership(userId)
-    const keyboard = []
-
-    if (!memberships.channel1)
+    // Check if the message contains a document
+    if (msg.document)
     {
-        keyboard.push([{ text: 'عضویت در کانال اول ما 1️⃣', url: 'https://t.me/DeepDevs' }])
-    }
-    if (!memberships.channel2)
-    {
-        keyboard.push([{ text: 'عضویت در کانال دوم ما 2️⃣', url: 'https://t.me/InstaDevs' }])
-    }
-    if (keyboard.length > 0)
-    {
-        keyboard.push([{ text: '👉 Use Bot 👈', callback_data: 'use_bot' }])
-        bot.sendMessage(chatId, 'برای استفاده از این قابلیت، لطفاً در کانال‌های زیر عضو شوید ✔️', {
-            reply_markup: {
-                inline_keyboard: keyboard,
-            }
-        })
-    } else
-    {
-        bot.sendMessage(chatId, 'شما در هر دو کانال عضو هستید. می‌توانید عکس خود را ⚠️ بصورت فایل ⚠️ آپلود کنید.')
-    }
-})
+        const fileMimeType = msg.document.mime_type
 
-bot.on('callback_query', async (callbackQuery) =>
-{
-    const chatId = callbackQuery.message.chat.id
-    const userId = callbackQuery.from.id
-    const messageId = callbackQuery.message.message_id
-    const data = callbackQuery.data
-
-    if (data === 'use_bot')
-    {
-        const memberships = await checkPublicChannelMembership(userId)
-
-        let errorMessage = ''
-        let keyboard = []
-
-        if (!memberships.channel1 && !memberships.channel2)
+        // Check if the document is an image
+        if (fileMimeType.startsWith('image/'))
         {
-            errorMessage = 'شما هنوز عضو هیچ کدام از کانال‌ها نیستید. لطفاً به کانال‌های زیر عضو شوید:'
-            keyboard.push([{ text: 'عضویت در کانال اول ما 1️⃣', url: 'https://t.me/DeepDevs' }])
-            keyboard.push([{ text: 'عضویت در کانال دوم ما 2️⃣', url: 'https://t.me/InstaDevs' }])
-        } else if (!memberships.channel1)
-        {
-            errorMessage = 'شما هنوز عضو کانال 1 نیستید. لطفاً به آن عضو شوید:'
-            keyboard.push([{ text: 'عضویت در کانال اول ما 1️⃣', url: 'https://t.me/DeepDevs' }])
-        } else if (!memberships.channel2)
-        {
-            errorMessage = 'شما هنوز عضو کانال 2 نیستید. لطفاً به آن عضو شوید:'
-            keyboard.push([{ text: 'عضویت در کانال دوم ما 2️⃣', url: 'https://t.me/InstaDevs' }])
-        }
+            // Check channel membership
+            const userId = msg.from.id
+            const memberships = await checkPublicChannelMembership(userId)
 
-        if (errorMessage !== '')
-        {
-            errorMessage += '\nلطفاً دوباره دکمه "use bot" را بزنید و پس از عضویت در کانال‌ها، عکس خود را آپلود کنید.'
-            keyboard.push([{ text: '👉 Use Bot 👈', callback_data: 'use_bot' }])
-            bot.sendMessage(chatId, errorMessage, {
-                reply_markup: {
-                    inline_keyboard: keyboard,
-                }
-            })
-        } else
-        {
-            bot.sendMessage(chatId, 'لطفا عکس مورد نظر خودتون رو ⚠️ بصورت فایل ⚠️ آپلود کنید ')
-        }
-    }
-
-    bot.deleteMessage(chatId, messageId)
-})
-
-// Event listener for receiving documents (images)
-bot.on('document', async (msg) =>
-{
-    const chatId = msg.chat.id
-    const userId = msg.from.id
-    const fileId = msg.document.file_id
-    const fileMimeType = msg.document.mime_type
-
-    // Check if the document is an image
-    if (fileMimeType.startsWith('image/'))
-    {
-        // Check channel membership
-        const memberships = await checkPublicChannelMembership(userId)
-
-        // Check if user is a member of both channels
-        if (memberships.channel1 && memberships.channel2)
-        {
-            // Function to ask for compression quality
-            const askForCompressionQuality = () =>
+            // Check if user is a member of both channels
+            if (memberships.channel1 && memberships.channel2)
             {
-                bot.sendMessage(chatId, 'لطفاً کیفیت فشرده‌سازی را انتخاب کنید (عددی بین 1 تا 100): \n ⚠️ عدد کیفیت پیشنهادی (80) میباشد ⚠️', { reply_markup: { force_reply: true } })
-                    .then(sentMessage =>
-                    {
-                        bot.onReplyToMessage(chatId, sentMessage.message_id, async (response) =>
+                // Function to ask for compression quality
+                const askForCompressionQuality = () =>
+                {
+                    bot.sendMessage(chatId, 'لطفاً کیفیت فشرده‌سازی را انتخاب کنید (عددی بین 1 تا 100): \n ⚠️ عدد کیفیت پیشنهادی (80) میباشد ⚠️', { reply_markup: { force_reply: true } })
+                        .then(sentMessage =>
                         {
-                            const quality = parseInt(response.text)
-                            if (!isNaN(quality) && quality >= 1 && quality <= 100)
+                            bot.onReplyToMessage(chatId, sentMessage.message_id, async (response) =>
                             {
-                                // Send a sticker to the user
-                                const stickerMessage = await bot.sendSticker(chatId, 'CAACAgIAAxkBAAKR4GYiUQ5EmwYIwZG9tp-iw_MwdmZyAAIjAAMoD2oUJ1El54wgpAY0BA')
-                                // Compress and send the image with the original format and the requested quality
-                                const compressedImageMessage = await compressAndSendImage(chatId, userId, fileId, fileMimeType, quality)
+                                const quality = parseInt(response.text)
+                                if (!isNaN(quality) && quality >= 1 && quality <= 100)
+                                {
+                                    // Send a sticker to the user
+                                    const stickerMessage = await bot.sendSticker(chatId, 'CAACAgIAAxkBAAKR4GYiUQ5EmwYIwZG9tp-iw_MwdmZyAAIjAAMoD2oUJ1El54wgpAY0BA')
+                                    // Compress and send the image with the original format and the requested quality
+                                    const compressedImageMessage = await compressAndSendImage(chatId, userId, msg.document.file_id, fileMimeType, quality)
 
-                                // Delete the sticker message
-
-                                bot.deleteMessage(chatId, stickerMessage.message_id)
-                                // Delete the quality message
-
-                                bot.deleteMessage(chatId, sentMessage.message_id)
-
-                                bot.deleteMessage(chatId, response.message_id)
-                            } else
-                            {
-                                // Ask for quality again if the entered value is not valid
-                                bot.sendMessage(chatId, '🚦لطفا برای انتخاب کیفیت مورد نظر فقط عدد وارد کنید 🚦')
-                                    .then(() => askForCompressionQuality()) // Ask for quality again
-                            }
+                                    // Delete the sticker message
+                                    bot.deleteMessage(chatId, stickerMessage.message_id)
+                                    // Delete the quality message
+                                    bot.deleteMessage(chatId, sentMessage.message_id)
+                                    bot.deleteMessage(chatId, response.message_id)
+                                } else
+                                {
+                                    // Ask for quality again if the entered value is not valid
+                                    bot.sendMessage(chatId, '🚦لطفا برای انتخاب کیفیت مورد نظر فقط عدد وارد کنید 🚦')
+                                        .then(() => askForCompressionQuality()) // Ask for quality again
+                                }
+                            })
                         })
-                    })
-            }
+                }
 
-            // Call function to ask for compression quality
-            askForCompressionQuality()
+                // Call function to ask for compression quality
+                askForCompressionQuality()
+            } else
+            {
+                // Prepare keyboard with channel links
+                let errorMessage = 'برای استفاده از این قابلیت، لطفاً در کانال‌های زیر عضو شوید ✔️'
+                const keyboard = []
+
+                if (!memberships.channel1)
+                {
+                    keyboard.push([{ text: 'عضویت در کانال اول ما 1️⃣', url: 'https://t.me/DeepDevs' }])
+                }
+                if (!memberships.channel2)
+                {
+                    keyboard.push([{ text: 'عضویت در کانال دوم ما 2️⃣', url: 'https://t.me/InstaDevs' }])
+                }
+                keyboard.push([{ text: '👉 Use Bot 👈', callback_data: 'use_bot' }])
+
+                // Send error message with keyboard
+                bot.sendMessage(chatId, errorMessage, {
+                    reply_markup: {
+                        inline_keyboard: keyboard,
+                    }
+                })
+            }
+        }
+
+    }
+
+})
+
+
+
+bot.on('message', async (msg) =>
+{
+    const chatId = msg.chat.id
+
+    // Check if the message contains a document
+    if (msg.document)
+    {
+        const fileMimeType = msg.document.mime_type
+        const fileExtension = msg.document.file_name.split('.').pop().toLowerCase() // Get the file extension and convert it to lowercase
+
+        // Check if the document is an image and its format is jpg or png
+        if (fileMimeType.startsWith('image/') && (fileExtension === 'jpg' || fileExtension === 'jpeg' || fileExtension === 'png'))
+        {
+            // The rest of your code for handling image documents...
         } else
         {
-            // Prepare keyboard with channel links
-            let errorMessage = 'برای استفاده از این قابلیت، لطفاً در کانال‌های زیر عضو شوید ✔️'
-            const keyboard = []
-
-            if (!memberships.channel1)
-            {
-                keyboard.push([{ text: 'عضویت در کانال اول ما 1️⃣', url: 'https://t.me/DeepDevs' }])
-            }
-            if (!memberships.channel2)
-            {
-                keyboard.push([{ text: 'عضویت در کانال دوم ما 2️⃣', url: 'https://t.me/InstaDevs' }])
-            }
-            keyboard.push([{ text: '👉 Use Bot 👈', callback_data: 'use_bot' }])
-
-            // Send error message with keyboard
-            bot.sendMessage(chatId, errorMessage, {
-                reply_markup: {
-                    inline_keyboard: keyboard,
-                }
-            })
+            bot.sendMessage(chatId, '🛑لطفا توجه داشته باشید پیام ارسالی به ربات باید بصورت 📁 فایل 📁 باشه و با فرمتهای JPG و PNG باشن 🛑')
+        }
+    } else if (msg.text)
+    {
+        // Check if the message is not one of the specified commands or a number between 1 to 100
+        if (!msg.text.startsWith('/start') && !msg.text.startsWith('/help') && isNaN(parseInt(msg.text)) && !msg.text.match(/^\d+$/) && !msg.text.match(/^\d{1,3}$/))
+        {
+            bot.sendMessage(chatId, '🛑لطفا توجه داشته باشید پیام ارسالی به ربات باید بصورت 📁 فایل 📁 باشه و با فرمتهای JPG و PNG باشن 🛑')
         }
     } else
     {
-        bot.sendMessage(chatId, 'لطفاً فقط فایل‌های عکس را ارسال کنید.')
+        // If the message is neither a document nor a text message, notify the user to send a file
+        bot.sendMessage(chatId, '🛑لطفا توجه داشته باشید پیام ارسالی به ربات باید بصورت 📁 فایل 📁 باشه و با فرمتهای JPG و PNG باشن 🛑')
     }
 })
 
@@ -241,7 +197,6 @@ async function compressAndSendImage (chatId, userId, fileId, fileMimeType, quali
     }
 }
 
-
 // Function to convert stream to buffer
 function streamToBuffer (stream)
 {
@@ -254,6 +209,85 @@ function streamToBuffer (stream)
     })
 }
 
+bot.onText(/\/start/, async (msg) =>
+{
+    const chatId = msg.chat.id
+    const userId = msg.from.id
+
+    const memberships = await checkPublicChannelMembership(userId)
+    const keyboard = []
+
+    if (!memberships.channel1 || !memberships.channel2)
+    {
+        if (!memberships.channel1)
+        {
+            keyboard.push([{ text: 'عضویت در کانال اول ما 1️⃣', url: 'https://t.me/DeepDevs' }])
+        }
+        if (!memberships.channel2)
+        {
+            keyboard.push([{ text: 'عضویت در کانال دوم ما 2️⃣', url: 'https://t.me/InstaDevs' }])
+        }
+        keyboard.push([{ text: '👉 Use Bot 👈', callback_data: 'use_bot' }])
+        bot.sendMessage(chatId, 'برای استفاده از این قابلیت، لطفاً در کانال‌های زیر عضو شوید ✔️', {
+            reply_markup: {
+                inline_keyboard: keyboard,
+            }
+        })
+    } else
+    {
+        bot.sendMessage(chatId, 'شما در هر دو کانال عضو هستید. می‌توانید عکس خود را ⚠️ بصورت فایل ⚠️ آپلود کنید.')
+    }
+})
+
+
+
+
+bot.on('callback_query', async (callbackQuery) =>
+{
+    const chatId = callbackQuery.message.chat.id
+    const userId = callbackQuery.from.id
+    const messageId = callbackQuery.message.message_id
+    const data = callbackQuery.data
+
+    if (data === 'use_bot')
+    {
+        const memberships = await checkPublicChannelMembership(userId)
+
+        let errorMessage = ''
+        let keyboard = []
+
+        if (!memberships.channel1 && !memberships.channel2)
+        {
+            errorMessage = 'شما هنوز عضو هیچ کدام از کانال‌ها نیستید. لطفاً به کانال‌های زیر عضو شوید:'
+            keyboard.push([{ text: 'عضویت در کانال اول ما 1️⃣', url: 'https://t.me/DeepDevs' }])
+            keyboard.push([{ text: 'عضویت در کانال دوم ما 2️⃣', url: 'https://t.me/InstaDevs' }])
+        } else if (!memberships.channel1)
+        {
+            errorMessage = 'شما هنوز عضو کانال 1 نیستید. لطفاً به آن عضو شوید:'
+            keyboard.push([{ text: 'عضویت در کانال اول ما 1️⃣', url: 'https://t.me/DeepDevs' }])
+        } else if (!memberships.channel2)
+        {
+            errorMessage = 'شما هنوز عضو کانال 2 نیستید. لطفاً به آن عضو شوید:'
+            keyboard.push([{ text: 'عضویت در کانال دوم ما 2️⃣', url: 'https://t.me/InstaDevs' }])
+        }
+
+        if (errorMessage !== '')
+        {
+            errorMessage += '\nلطفاً دوباره دکمه "use bot" را بزنید و پس از عضویت در کانال‌ها، عکس خود را آپلود کنید.'
+            keyboard.push([{ text: '👉 Use Bot 👈', callback_data: 'use_bot' }])
+            bot.sendMessage(chatId, errorMessage, {
+                reply_markup: {
+                    inline_keyboard: keyboard,
+                }
+            })
+        } else
+        {
+            bot.sendMessage(chatId, 'لطفا عکس مورد نظر خودتون رو ⚠️ بصورت فایل ⚠️ آپلود کنید ')
+        }
+    }
+
+    bot.deleteMessage(chatId, messageId)
+})
 
 bot.onText(/\/help/, (msg) =>
 {

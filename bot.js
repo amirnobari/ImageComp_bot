@@ -151,8 +151,6 @@ bot.on('message', async (msg) =>
 
 
 
-
-
 // Function to compress and send image with custom quality
 async function compressAndSendImage (chatId, userId, fileId, fileMimeType, quality)
 {
